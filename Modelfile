@@ -1,0 +1,57 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# UnaniMed AI — Ollama Modelfile
+# Model  : llama3.1:8b-instruct  (GGUF Q4_K_M quantized)
+# RAM    : ~4.5 GB VRAM / RAM  (vs ~8 GB for f16)
+# Speed  : ~2× faster inference than full-precision on same hardware
+#
+# To pull the quantized model:
+#   ollama pull llama3.1:8b-instruct:q4_K_M
+#
+# To build this custom model:
+#   ollama create unani-med -f Modelfile
+#
+# To run (keep model loaded 10 min between requests):
+#   ollama run unani-med --keepalive 10m
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM llama3.1:8b-instruct:q4_K_M
+
+# ── Sampling parameters ───────────────────────────────────────────────────────
+PARAMETER temperature   0.7
+PARAMETER top_p         0.9
+PARAMETER top_k         40
+PARAMETER repeat_penalty 1.1
+
+# ── Context / batching ────────────────────────────────────────────────────────
+# 4096 tokens is sufficient for RAG prompt + patient context + answer
+PARAMETER num_ctx   4096
+PARAMETER num_batch 512
+
+# ── GPU offloading ────────────────────────────────────────────────────────────
+# num_gpu = number of layers to offload to GPU
+# With 16 GB GDDR7, set to 99 to push ALL layers to GPU for maximum speed
+PARAMETER num_gpu    99
+PARAMETER num_thread 4
+
+# ── Memory / KV cache ─────────────────────────────────────────────────────────
+# f16_kv: use fp16 for key-value cache — halves KV cache memory
+# use_mmap: memory-map model weights (faster cold load, less RAM copy)
+# use_mlock: do NOT lock model in RAM — let OS page it if needed
+PARAMETER f16_kv    true
+PARAMETER use_mmap  true
+PARAMETER use_mlock false
+
+# ── keep_alive ────────────────────────────────────────────────────────────────
+# Keep model in VRAM for 10 minutes after last request.
+# Longer = faster response on next message; shorter = frees GPU for other tasks.
+# Managed dynamically by ollama_config.py (sends PATCH to /api/generate).
+# Override at runtime:  ollama run unani-med --keepalive 10m
+PARAMETER num_predict 512
+
+# ── System prompt ─────────────────────────────────────────────────────────────
+SYSTEM """তুমি একজন সহায়ক ইউনানী স্বাস্থ্য-তথ্য সহকারী।
+তুমি প্রকৃত হাকিম বা ডাক্তারের বিকল্প নও।
+শুধুমাত্র প্রদত্ত রেফারেন্স বই থেকে সাধারণ তথ্য দাও।
+জটিল বা গুরুতর স্বাস্থ্য সমস্যায় সবসময় একজন প্রকৃত হাকিম/ডাক্তার দেখানোর পরামর্শ দাও।
+রোগীর প্রোফাইল তথ্য (বয়স, লিঙ্গ, পূর্ববর্তী রোগ) বিবেচনায় নিয়ে উত্তর দাও।
+নির্দিষ্ট ডোজ বা ওষুধের পরিমাণ কখনো উল্লেখ করো না।"""

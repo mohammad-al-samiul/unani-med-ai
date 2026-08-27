@@ -1,0 +1,233 @@
+{
+  "name": "Error Handling Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "error-condition",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "isNotEmpty" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-error-node",
+      "name": "Check Error",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "error-message",   "name": "error_message",   "value": "={{ $json.error.message }}",                                     "type": "string" },
+            { "id": "error-node",      "name": "error_node",      "value": "={{ $json.execution.data.context.node.name }}",                   "type": "string" },
+            { "id": "error-workflow",  "name": "error_workflow",  "value": "={{ $json.execution.data.context.workflow.name }}",               "type": "string" },
+            { "id": "error-timestamp", "name": "error_timestamp", "value": "={{ $json.execution.data.context.timestamp }}",                   "type": "string" },
+            { "id": "retry-count",     "name": "retry_count",     "value": "={{ $json.execution.data.context.retryCount || 0 }}",             "type": "number" },
+            { "id": "sender-id",       "name": "sender_id",       "value": "={{ $json.execution.data.context.sender_id || 'unknown' }}",      "type": "string" },
+            { "id": "user-input",      "name": "user_input",      "value": "={{ $json.execution.data.context.user_input || '' }}",            "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-error-info-node",
+      "name": "Extract Error Info",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "retry-condition",
+              "leftValue": "={{ $json.retry_count }}",
+              "rightValue": 3,
+              "operator": { "type": "number", "operation": "lt" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-retry-limit-node",
+      "name": "Check Retry Limit",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.pow(2, $json.retry_count) }}",
+        "unit": "seconds"
+      },
+      "id": "wait-backoff-node",
+      "name": "Exponential Backoff Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/facebook-messenger-webhook",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"retry\": true,\n  \"retry_count\": $json.retry_count + 1,\n  \"sender_id\": $json.sender_id,\n  \"user_input\": $json.user_input\n} }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "retry-webhook-node",
+      "name": "Retry Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Append structured error to local log file\nconst fs = require('fs');\nconst logPath = 'C:\\\\Users\\\\Admin\\\\Documents\\\\dev\\\\office-dev\\\\unani-med-ai\\\\error_log.txt';\n\nconst logEntry = JSON.stringify({\n  timestamp: $json.error_timestamp || new Date().toISOString(),\n  workflow:  $json.error_workflow,\n  node:      $json.error_node,\n  error:     $json.error_message,\n  sender_id: $json.sender_id,\n  retry_count: $json.retry_count,\n  status: 'FAILED_AFTER_3_RETRIES'\n}) + '\\n';\n\ntry {\n  fs.appendFileSync(logPath, logEntry, 'utf8');\n  return [{ json: { logged: true, log_path: logPath } }];\n} catch (e) {\n  return [{ json: { logged: false, error: e.message } }];\n}"
+      },
+      "id": "write-error-log-node",
+      "name": "Write Error Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 420]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "telegram-text",
+              "name": "telegram_text",
+              "value": "={{ '🚨 *UnaniMed AI Error*\\n\\n📋 *Workflow:* ' + $('Extract Error Info').item.json.error_workflow + '\\n⚠️ *Node:* ' + $('Extract Error Info').item.json.error_node + '\\n❌ *Error:* ' + $('Extract Error Info').item.json.error_message.substring(0, 200) + '\\n🔁 *Retries:* ' + $('Extract Error Info').item.json.retry_count + '/3\\n🕐 *Time:* ' + new Date().toLocaleString(\"bn-BD\") }}",
+              "type": "string"
+            },
+            {
+              "id": "forward-sender",
+              "name": "sender_id",
+              "value": "={{ $('Extract Error Info').item.json.sender_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-telegram-msg-node",
+      "name": "Prepare Telegram Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1050, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"chat_id\": $env.TELEGRAM_CHAT_ID,\n  \"text\": $json.telegram_text,\n  \"parse_mode\": \"Markdown\"\n} }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "send-telegram-alert-node",
+      "name": "Send Telegram Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"recipient\": { \"id\": $json.sender_id },\n  \"message\": {\n    \"text\": \"দুঃখিত, এই মুহূর্তে আপনার অনুরোধ প্রক্রিয়া করা সম্ভব হয়নি। অনুগ্রহ করে কিছুক্ষণ পরে আবার চেষ্টা করুন।\"\n  }\n} }}",
+        "options": {}
+      },
+      "id": "notify-user-error-node",
+      "name": "Notify User of Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1450, 420],
+      "credentials": {
+        "httpHeaderAuth": { "id": "facebook-messenger-auth", "name": "Facebook Messenger Auth" }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"error\", \"message\": \"Request failed after 3 retries. Admin notified.\" } }}",
+        "options": { "responseCode": 500 }
+      },
+      "id": "error-response-node",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1650, 420]
+    }
+  ],
+  "connections": {
+    "Check Error": {
+      "main": [
+        [{ "node": "Extract Error Info", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Extract Error Info": {
+      "main": [
+        [{ "node": "Check Retry Limit", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Retry Limit": {
+      "main": [
+        [{ "node": "Exponential Backoff Wait", "type": "main", "index": 0 }],
+        [{ "node": "Write Error Log",          "type": "main", "index": 0 }]
+      ]
+    },
+    "Exponential Backoff Wait": {
+      "main": [
+        [{ "node": "Retry Webhook", "type": "main", "index": 0 }]
+      ]
+    },
+    "Write Error Log": {
+      "main": [
+        [{ "node": "Prepare Telegram Message", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Telegram Message": {
+      "main": [
+        [{ "node": "Send Telegram Alert", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Telegram Alert": {
+      "main": [
+        [{ "node": "Notify User of Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Notify User of Error": {
+      "main": [
+        [{ "node": "Error Response", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": true
+  },
+  "staticData": null,
+  "tags": ["error-handling", "reliability"],
+  "triggerCount": 0,
+  "updatedAt": "2024-08-26T00:00:00.000Z",
+  "versionId": "2"
+}

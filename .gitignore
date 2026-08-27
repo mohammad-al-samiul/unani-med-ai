@@ -1,0 +1,32 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python virtual environments and caches
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Local databases and runtime data
+*.db
+*.sqlite
+*.sqlite3
+chromadb_persist/
+data/databases/
+data/books/
+
+# Logs, backups and generated files
+*.log
+*.tmp
+*.bak
+backups/
+
+# Local n8n and editor files
+.n8n/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,100 @@
+{
+  "pre_check_keywords": {
+    "pregnancy_complications": [
+      "গর্ভাবস্থা জটিলতা",
+      "গর্ভের সমস্যা",
+      "প্রসব জটিলতা",
+      "গর্ভপাত",
+      "গর্ভনিরোধক",
+      "pregnancy complications",
+      "miscarriage",
+      "abortion",
+      "labor complications"
+    ],
+    "severe_pain": [
+      "তীব্র ব্যথা",
+      "অসহনীয় ব্যথা",
+      "মারাত্মক ব্যথা",
+      "অসহ্য যন্ত্রণা",
+      "severe pain",
+      "unbearable pain",
+      "excruciating pain"
+    ],
+    "breathing_difficulty": [
+      "শ্বাসকষ্ট",
+      "শ্বাস নিতে কষ্ট",
+      "শ্বাস প্রশ্ন",
+      "ঘাড় ফাটলা",
+      "breathing difficulty",
+      "shortness of breath",
+      "breathlessness",
+      "choking"
+    ],
+    "consciousness_loss": [
+      "জ্ঞান হারানো",
+      "অজ্ঞান হওয়া",
+      "সংজ্ঞা হারানো",
+      "মৃত্যুর সমীপে",
+      "loss of consciousness",
+      "fainting",
+      "unconscious",
+      "near death"
+    ],
+    "child_related": [
+      "শিশু",
+      "বাচ্চা",
+      "বালক",
+      "বালিকা",
+      "শিশুর বয়স",
+      "child",
+      "baby",
+      "toddler",
+      "infant"
+    ],
+    "medication_interaction": [
+      "ওষুধ মিথস্ক্রিয়া",
+      "ওষুধ প্রতিক্রিয়া",
+      "ড্রাগ ইন্টারঅ্যাকশন",
+      "দীর্ঘস্থায়ী রোগে ওষুধ",
+      "medication interaction",
+      "drug interaction",
+      "long term medication"
+    ]
+  },
+  "post_check_regex": {
+    "dosage_patterns": [
+      "\\d+\\s*(গ্রাম|মিলিগ্রাম|মিলি|এমজি|মিলিগ্রাম|কেজি|লিটার|মিলিলিটার|ট্যাবলেট|ক্যাপসুল|চামচ|চামাচ|ফোঁটা|ফোঁট|চামচ|চামাচ|gram|mg|milligram|kilogram|liter|ml|milliliter|tablet|capsule|spoon|drop)",
+      "\\d+\\s*-\\s*\\d+\\s*(গ্রাম|মিলিগ্রাম|মিলি|এমজি|কেজি|লিটার|মিলিলিটার|ট্যাবলেট|ক্যাপসুল|চামচ|gram|mg|milligram|kilogram|liter|ml|milliliter|tablet|capsule|spoon)",
+      "\\d+\\s*times\\s*a\\s*day",
+      "\\d+\\s*times\\s*daily",
+      "\\d+\\s*বার\\s*দিনে",
+      "\\d+\\s*বার\\s*দৈনিক",
+      "take\\s+\\d+\\s*(গ্রাম|মিলিগ্রাম|মিলি|এমজি|কেজি|লিটার|মিলিলিটার|ট্যাবলেট|ক্যাপসুল|চামচ|gram|mg|milligram|kilogram|liter|ml|milliliter|tablet|capsule|spoon)",
+      "খাও\\s*\\d+\\s*(গ্রাম|মিলিগ্রাম|মিলি|এমজি|কেজি|লিটার|মিলিলিটার|ট্যাবলেট|ক্যাপসুল|চামচ)",
+      "সেবন\\s*\\d+\\s*(গ্রাম|মিলিগ্রাম|মিলি|এমজি|কেজি|লিটার|মিলিলিটার|ট্যাবলেট|ক্যাপসুল|চামচ)"
+    ],
+    "specific_medication": [
+      "paracetamol\\s*\\d+\\s*mg",
+      "ibuprofen\\s*\\d+\\s*mg",
+      "aspirin\\s*\\d+\\s*mg",
+      "amoxicillin\\s*\\d+\\s*mg",
+      "antibiotic\\s*\\d+\\s*(গ্রাম|মিলিগ্রাম|mg)",
+      "painkiller\\s*\\d+\\s*(গ্রাম|মিলিগ্রাম|mg)"
+    ],
+    "frequency_patterns": [
+      "প্রতি\\s*\\d+\\s*ঘন্টা",
+      "every\\s*\\d+\\s*hours",
+      "\\d+\\s*ঘন্টা\\s*পর",
+      "\\d+\\s*hours\\s*later",
+      "সকাল\\s*ও\\s*সন্ধ্যা",
+      "morning\\s*and\\s*evening"
+    ]
+  },
+  "pre_check_message": "এই বিষয়ে অনুগ্রহ করে সরাসরি একজন হাকিম/ডাক্তারের পরামর্শ নিন।",
+  "post_check_disclaimer": "নোট: নির্দিষ্ট ডোজ বা পরিমাণ সম্পর্কে তথ্য সরিয়ে দেওয়া হয়েছে। ঔষধ সেবনের আগে অবশ্যই একজন হাকিম/ডাক্তারের পরামর্শ নিন।",
+  "threshold_settings": {
+    "min_match_count": 1,
+    "case_sensitive": false,
+    "whole_word_match": false
+  }
+}
