@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UnaniMed AI — সম্পূর্ণ লোকাল ইউনানী চিকিৎসা ও ভেষজ সহায়ক</title>
+  <meta name="description" content="ইউনানী ভেষজ চিকিৎসা সহায়ক — সম্পূর্ণ লোকাল AI (Ollama Llama 3.1:8b), ভয়েস ইনপুট ও অডিও উত্তর, প্রেসক্রিপশন ও ছবি বিশ্লেষণ, স্বয়ংক্রিয় কাস্টমার লিড ও টেলিগ্রাম অ্যালার্ট।">
+  
+  <!-- Fonts: Outfit (English/Modern) + Hind Siliguri (Bengali) + JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Feather Icons / FontAwesome for clean UI -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="glow-orb glow-top-left"></div>
+  <div class="glow-orb glow-bottom-right"></div>
+  <div class="glow-orb glow-center"></div>
+
+  <!-- App Wrapper -->
+  <div class="app-container">
+    
+    <!-- Top Navigation Bar -->
+    <header class="top-nav">
+      <div class="nav-brand">
+        <div class="brand-icon-wrapper">
+          <i class="fa-solid fa-leaf brand-icon"></i>
+          <span class="pulse-dot"></span>
+        </div>
+        <div class="brand-text">
+          <h1 class="brand-title">UnaniMed <span class="gradient-text">AI</span></h1>
+          <p class="brand-subtitle">স্বয়ংসম্পূর্ণ ইউনানী চিকিৎসা ও ভেষজ বিশেষজ্ঞ • 100% Local AI</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs">
+        <button class="nav-tab active" id="tab-chat" onclick="switchView('chat')">
+          <i class="fa-solid fa-comments"></i> <span>পরামর্শ চ্যাট</span>
+        </button>
+        <button class="nav-tab" id="tab-herbs" onclick="switchView('herbs')">
+          <i class="fa-solid fa-seedling"></i> <span>ভেষজ ক্যাটালগ</span>
+        </button>
+        <button class="nav-tab" id="tab-leads" onclick="switchView('leads')">
+          <i class="fa-solid fa-address-book"></i> <span>কাস্টমার লিড (<span id="leads-count-badge">0</span>)</span>
+        </button>
+        <button class="nav-tab" id="tab-status" onclick="switchView('status')">
+          <i class="fa-solid fa-server"></i> <span>সিস্টেম মনিটর</span>
+        </button>
+      </nav>
+
+      <!-- Control Settings (Modality, Language, New Order) -->
+      <div class="nav-actions">
+        <!-- Modality Selector -->
+        <div class="control-group" title="উত্তরের ধরন নির্বাচন করুন">
+          <label class="control-label"><i class="fa-solid fa-sliders"></i></label>
+          <select id="modality-select" class="custom-select">
+            <option value="both">🔊 ভয়েস + টেক্সট</option>
+            <option value="auto" selected>✨ অটোমেটিক</option>
+            <option value="text_only">📝 শুধু টেক্সট</option>
+            <option value="voice_only">🎙️ শুধু ভয়েস</option>
+          </select>
+        </div>
+
+        <!-- Language Selector -->
+        <div class="control-group" title="ভাষা নির্বাচন">
+          <select id="language-select" class="custom-select">
+            <option value="bn" selected>🇧🇩 বাংলা</option>
+            <option value="en">🇬🇧 English</option>
+            <option value="auto">🌐 Auto Detect</option>
+          </select>
+        </div>
+
+        <!-- Direct Order Button -->
+        <button class="btn-order-glow" onclick="openOrderModal()" id="btn-quick-order">
+          <i class="fa-solid fa-bag-shopping"></i> <span>ঔষধ অর্ডার</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- ================= VIEW 1: CHAT VIEW ================= -->
+      <section id="view-chat" class="view-section active">
+        
+        <!-- Chat History Container -->
+        <div class="chat-container" id="chat-container">
+          
+          <!-- Welcome Message Card -->
+          <div class="chat-message bot-message intro-card">
+            <div class="message-avatar">
+              <i class="fa-solid fa-user-doctor"></i>
+            </div>
+            <div class="message-body">
+              <div class="message-header">
+                <span class="bot-name">ইউনানী মেড এআই সহকারী</span>
+                <span class="ai-badge"><i class="fa-solid fa-microchip"></i> Ollama Llama 3.1:8b</span>
+                <span class="message-time" id="intro-time">আজ</span>
+              </div>
+              <div class="message-text">
+                <p><strong>আসসালামু আলাইকুম!</strong> আমি আপনার ব্যক্তিগত ইউনানী স্বাস্থ্য ও ভেষজ সহায়ক।</p>
+                <p>আপনি আমাকে <strong>ভয়েস রেকর্ডিং</strong>, <strong>বাংলা বা ইংরেজি টেক্সট</strong> অথবা <strong>প্রেসক্রিপশন/ভেষজ গাছের ছবি</strong> দিয়ে যেকোনো স্বাস্থ্য সমস্যা সম্পর্কে জিজ্ঞেস করতে পারেন।</p>
+                <ul class="feature-highlights">
+                  <li>🎙️ <strong>ভয়েস ইনপুট ও অডিও উত্তর:</strong> মাইক চেপে কথা বলুন, ভয়েসে উত্তর শুনুন।</li>
+                  <li>📷 <strong>ছবি ও প্রেসক্রিপশন বিশ্লেষণ:</strong> ছবি আপলোড করে ইউনানী তথ্য জানুন।</li>
+                  <li>🌿 <strong>ভেষজ দর্শন:</strong> যেকোনো ভেষজের নাম লিখে ছবি দেখতে চান।</li>
+                  <li>📦 <strong>হোম ডেলিভারি অর্ডার:</strong> নাম, ফোন ও ঠিকানা দিলে সাথে সাথে সংরক্ষিত হবে ও টেলিগ্রামে অ্যালার্ট যাবে।</li>
+                </ul>
+              </div>
+
+              <!-- Quick Prompt Chips -->
+              <div class="quick-chips">
+                <button class="chip" onclick="sendQuickPrompt('জিএল টন (GL Ton) সিরাপের কার্যকারিতা, সেবনবিধি ও দাম কত?')">
+                  <i class="fa-solid fa-heart-pulse"></i> জিএল টন (হার্ট ও ব্রেন)
+                </button>
+                <button class="chip" onclick="sendQuickPrompt('শুকনো কাশি ও শ্বাসকষ্টে রেসপিরেক্স ও কফটন সিরাপের বিবরণ ও দাম দাও')">
+                  <i class="fa-solid fa-head-side-cough"></i> রেসপিরেক্স ও কফটন (কাশি)
+                </button>
+                <button class="chip" onclick="sendQuickPrompt('গ্যাস, এসিডিটি ও পেট ফাঁপায় পেপটো-জি সিরাপ কিভাবে কাজ করে?')">
+                  <i class="fa-solid fa-fire-flame-simple"></i> পেপটো-জি (গ্যাস্ট্রিক)
+                </button>
+                <button class="chip" onclick="sendQuickPrompt('বাত-বেদনা ও জয়েন্টের ব্যথায় রিউমারেক্স ক্যাপসুলের কার্যকারিতা কি?')">
+                  <i class="fa-solid fa-bone"></i> রিউমারেক্স (বাত-ব্যথা)
+                </button>
+                <button class="chip" onclick="sendQuickPrompt('আইবিএস (IBS) ও পুরাতন আমাশয়ে মোবিক সিরাপের দাম ও সেবনবিধি কি?')">
+                  <i class="fa-solid fa-notes-medical"></i> মোবিক (IBS ও আমাশয়)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dynamic messages will be appended here -->
+        </div>
+
+        <!-- Live Audio Waveform Visualizer Bar (Shown during voice recording) -->
+        <div id="recording-bar" class="recording-bar hidden">
+          <div class="rec-indicator">
+            <span class="rec-dot"></span>
+            <span class="rec-timer" id="rec-timer">00:00</span>
+            <span class="rec-label">কথা বলুন... (Listening)</span>
+          </div>
+          <canvas id="audio-waveform-canvas" width="300" height="40"></canvas>
+          <div class="rec-actions">
+            <button class="btn-rec-cancel" onclick="cancelVoiceRecording()" title="বাতিল করুন">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+            <button class="btn-rec-send" onclick="stopAndSendVoiceRecording()" title="পাঠান">
+              <i class="fa-solid fa-check"></i> পাঠাও
+            </button>
+          </div>
+        </div>
+
+        <!-- Image Upload Preview Box (Shown when user selects a photo) -->
+        <div id="image-preview-container" class="image-preview-container hidden">
+          <div class="preview-card">
+            <img id="preview-image-elem" src="" alt="Preview">
+            <div class="preview-info">
+              <span id="preview-filename">image.jpg</span>
+              <span class="preview-tag"><i class="fa-solid fa-camera"></i> প্রেসক্রিপশন / ভেষজ ছবি</span>
+            </div>
+            <button class="btn-remove-preview" onclick="clearSelectedImage()" title="মুছে ফেলুন">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Lead Detection Notification Banner -->
+        <div id="lead-detected-banner" class="lead-detected-banner hidden">
+          <div class="banner-content">
+            <i class="fa-solid fa-circle-check banner-icon"></i>
+            <div>
+              <strong>কাস্টমার লিড সংরক্ষিত হয়েছে!</strong>
+              <span id="lead-banner-text">নাম, ফোন নম্বর ও ঠিকানা ডাটাবেজে যুক্ত হয়েছে এবং টেলিগ্রামে অ্যালার্ট পাঠানো হয়েছে।</span>
+            </div>
+          </div>
+          <button class="btn-banner-close" onclick="dismissLeadBanner()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <!-- Input Bar Section -->
+        <div class="input-panel">
+          <div class="input-container">
+            
+            <!-- Image Attachment Button -->
+            <button class="icon-btn" id="btn-attach-image" onclick="triggerImageUpload()" title="ছবি বা প্রেসক্রিপশন আপলোড করুন">
+              <i class="fa-solid fa-image"></i>
+            </button>
+            <input type="file" id="image-file-input" accept="image/*" style="display:none" onchange="handleImageSelected(event)">
+
+            <!-- Textarea for text message -->
+            <textarea 
+              id="user-text-input" 
+              class="chat-textarea" 
+              placeholder="আপনার স্বাস্থ্য সমস্যা লিখুন বা মাইকে বলুন... (যেমন: কাশির জন্য ওষুধ চাই, নাম: রহিম, ফোন: 01712...)" 
+              rows="1"
+              onkeydown="handleInputKeydown(event)"
+              oninput="autoResizeTextarea(this)"
+            ></textarea>
+
+            <!-- Voice Recording Button -->
+            <button class="icon-btn voice-btn" id="btn-voice-record" onclick="toggleVoiceRecording()" title="ভয়েস রেকর্ড করুন">
+              <i class="fa-solid fa-microphone" id="voice-icon"></i>
+            </button>
+
+            <!-- Send Message Button -->
+            <button class="btn-send" id="btn-send-message" onclick="handleSendMessage()" title="বার্তা পাঠান">
+              <i class="fa-solid fa-paper-plane"></i>
+            </button>
+          </div>
+          <div class="input-footer">
+            <span>🌿 সম্পূর্ণ গোপনীয় ও লোকাল AI চালিত • জরুরি অবস্থায় ডাক্তারের শরণাপন্ন হোন</span>
+            <span id="tts-audio-status" class="tts-status"><i class="fa-solid fa-volume-high"></i> অডিও স্পিচ প্রস্তুত</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= VIEW 2: HERBAL CATALOG VIEW ================= -->
+      <section id="view-herbs" class="view-section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">🌿 ইউনানী ভেষজ মহাকোষ (Herbal Visual Catalog)</h2>
+            <p class="section-subtitle">প্রাকৃতিক উপাদান, বোটানিক্যাল তথ্য, মিজাজ (Temperament) এবং ব্যবহারবিধি</p>
+          </div>
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="herb-search-input" placeholder="ভেষজের নাম বা রোগ খুঁজুন..." oninput="filterHerbsCatalog()">
+          </div>
+        </div>
+
+        <div class="herbs-grid" id="herbs-grid-container">
+          <!-- Dynamically populated herbs cards -->
+        </div>
+      </section>
+
+      <!-- ================= VIEW 3: CUSTOMER LEADS DASHBOARD ================= -->
+      <section id="view-leads" class="view-section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">📋 কাস্টমার লিড ও অর্ডার ব্যবস্থাপনা (Admin Dashboard)</h2>
+            <p class="section-subtitle">চ্যাটে সংগৃহীত নাম, মোবাইল নম্বর, ঠিকানা এবং টেলিগ্রাম নোটিফিকেশন হিস্ট্রি</p>
+          </div>
+          <div class="leads-actions">
+            <button class="btn-primary" onclick="loadLeadsFromDB()"><i class="fa-solid fa-arrows-rotate"></i> রিফ্রেশ</button>
+            <button class="btn-secondary" onclick="exportLeadsToCSV()"><i class="fa-solid fa-file-export"></i> CSV এক্সপোর্ট</button>
+            <button class="btn-order-glow" onclick="openOrderModal()"><i class="fa-solid fa-plus"></i> নতুন অর্ডার</button>
+          </div>
+        </div>
+
+        <!-- Filter bar -->
+        <div class="leads-filter-bar">
+          <input type="text" id="leads-search-input" placeholder="নাম, ফোন বা ঠিকানা দিয়ে সার্চ..." oninput="filterLeadsTable()">
+          <select id="leads-status-filter" class="custom-select" onchange="filterLeadsTable()">
+            <option value="">সকল স্ট্যাটাস (All)</option>
+            <option value="new">🆕 নতুন (New)</option>
+            <option value="contacted">📞 যোগাযোগকৃত (Contacted)</option>
+            <option value="confirmed">✅ নিশ্চিত (Confirmed)</option>
+            <option value="delivered">🚚 ডেলিভার্ড (Delivered)</option>
+            <option value="cancelled">❌ বাতিল (Cancelled)</option>
+          </select>
+        </div>
+
+        <!-- Leads Table -->
+        <div class="table-card">
+          <table class="data-table" id="leads-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>গ্রাহকের নাম</th>
+                <th>মোবাইল নম্বর</th>
+                <th>ঠিকানা</th>
+                <th>রোগ / অর্ডার বিবরণ</th>
+                <th>চ্যানেল</th>
+                <th>টেলিগ্রাম</th>
+                <th>স্ট্যাটাস</th>
+                <th>তারিখ</th>
+                <th>অ্যাকশন</th>
+              </tr>
+            </thead>
+            <tbody id="leads-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ================= VIEW 4: SYSTEM MONITOR VIEW ================= -->
+      <section id="view-status" class="view-section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">⚡ লোকাল সিস্টেম ও সার্ভিস মনিটর</h2>
+            <p class="section-subtitle">Ollama Llama 3.1:8b, STT, TTS, SQLite ডাটাবেজ ও টেলিগ্রাম সংযোগের লাইভ স্ট্যাটাস</p>
+          </div>
+          <button class="btn-primary" onclick="checkSystemStatus()"><i class="fa-solid fa-arrows-rotate"></i> টেস্ট চালান</button>
+        </div>
+
+        <div class="status-grid">
+          <!-- Ollama Model Card -->
+          <div class="status-card" id="status-card-ollama">
+            <div class="status-card-header">
+              <div class="status-icon"><i class="fa-solid fa-microchip"></i></div>
+              <span class="status-badge" id="badge-ollama">চেক করা হচ্ছে...</span>
+            </div>
+            <h3 class="status-name">Ollama LLM (llama3.1:8b)</h3>
+            <p class="status-desc">লোকাল জেনারেটিভ এআই ইঞ্জিন (Port 11434)। 0 API Cost।</p>
+            <div class="status-detail" id="detail-ollama">URL: http://localhost:11434</div>
+          </div>
+
+          <!-- STT Whisper Card -->
+          <div class="status-card" id="status-card-stt">
+            <div class="status-card-header">
+              <div class="status-icon"><i class="fa-solid fa-microphone-lines"></i></div>
+              <span class="status-badge" id="badge-stt">চেক করা হচ্ছে...</span>
+            </div>
+            <h3 class="status-name">Speech-to-Text (STT)</h3>
+            <p class="status-desc">faster-whisper লোকাল মডেল (Port 8001)। বাংলা ও ইংরেজি স্পিচ রিকগনিশন।</p>
+            <div class="status-detail" id="detail-stt">Port: 8001</div>
+          </div>
+
+          <!-- TTS Speech Card -->
+          <div class="status-card" id="status-card-tts">
+            <div class="status-card-header">
+              <div class="status-icon"><i class="fa-solid fa-volume-high"></i></div>
+              <span class="status-badge" id="badge-tts">চেক করা হচ্ছে...</span>
+            </div>
+            <h3 class="status-name">Text-to-Speech (TTS)</h3>
+            <p class="status-desc">Piper TTS ও হাই-কোয়ালিটি অডিও সংশ্লেষণ (Port 8002)।</p>
+            <div class="status-detail" id="detail-tts">Port: 8002</div>
+          </div>
+
+          <!-- Telegram Bot Card -->
+          <div class="status-card" id="status-card-telegram">
+            <div class="status-card-header">
+              <div class="status-icon"><i class="fa-brands fa-telegram"></i></div>
+              <span class="status-badge" id="badge-telegram">চেক করা হচ্ছে...</span>
+            </div>
+            <h3 class="status-name">Telegram Bot Notifier</h3>
+            <p class="status-desc">নতুন কাস্টমার লিড ও অর্ডার তৈরি হলে রিয়েল-টাইম মেসেজ নোটিফিকেশন।</p>
+            <div class="status-detail" id="detail-telegram">
+              <button class="btn-sm" onclick="testTelegramAlert()">টেস্ট মেসেজ পাঠান</button>
+            </div>
+          </div>
+
+          <!-- SQLite Lead DB Card -->
+          <div class="status-card" id="status-card-db">
+            <div class="status-card-header">
+              <div class="status-icon"><i class="fa-solid fa-database"></i></div>
+              <span class="status-badge" id="badge-db">সক্রিয়</span>
+            </div>
+            <h3 class="status-name">SQLite Lead Database</h3>
+            <p class="status-desc">লোকাল কাস্টমার লিড, ফোন ও ঠিকানা সংরক্ষণের ডেটাবেজ।</p>
+            <div class="status-detail" id="detail-db">Path: data/databases/customer_leads.db</div>
+          </div>
+
+          <!-- Vision Multimodal Card -->
+          <div class="status-card" id="status-card-vision">
+            <div class="status-card-header">
+              <div class="status-icon"><i class="fa-solid fa-eye"></i></div>
+              <span class="status-badge" id="badge-vision">সক্রিয়</span>
+            </div>
+            <h3 class="status-name">Vision & Image Analysis</h3>
+            <p class="status-desc">প্রেসক্রিপশন ও ভেষজ পাতা/উদ্ভিদ শনাক্তকরণ (Multimodal + OCR)।</p>
+            <div class="status-detail" id="detail-vision">Local Vision Pipeline Ready</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ================= DIRECT ORDER MODAL ================= -->
+  <div id="order-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <i class="fa-solid fa-file-invoice modal-icon"></i>
+          <h3>ইউনানী ভেষজ ঔষধ অর্ডার ও পরামর্শ ফরম</h3>
+        </div>
+        <button class="modal-close" onclick="closeOrderModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">আপনার তথ্য প্রদান করুন। আমাদের প্রতিনিধি দ্রুত যোগাযোগ করবে এবং টেলিগ্রামে তাৎক্ষণিক নোটিফিকেশন যাবে।</p>
+        
+        <div class="form-group">
+          <label for="order-name">👤 আপনার পুরো নাম *</label>
+          <input type="text" id="order-name" placeholder="যেমন: মোঃ সাকিব হাসান" required>
+        </div>
+
+        <div class="form-group">
+          <label for="order-phone">📞 মোবাইল নম্বর * (01XXXXXXXXX)</label>
+          <input type="tel" id="order-phone" placeholder="যেমন: 01712345678" required>
+        </div>
+
+        <div class="form-group">
+          <label for="order-address">📍 ডেলিভারি ঠিকানা *</label>
+          <input type="text" id="order-address" placeholder="যেমন: বাসা নং ১২, রোড ৪, সেক্টর ৭, উত্তরা, ঢাকা" required>
+        </div>
+
+        <div class="form-group">
+          <label for="order-items">🌿 প্রয়োজনীয় ঔষধ / স্বাস্থ্য সমস্যার বিবরণ</label>
+          <textarea id="order-items" rows="3" placeholder="যেমন: গ্যাস্ট্রিকের জন্য ত্রিফলা চূর্ণ এবং রোগ প্রতিরোধের জন্য মধু ও কালোজিরা তেল"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeOrderModal()">বাতিল</button>
+        <button class="btn-order-glow" onclick="submitManualOrder()" id="btn-submit-order">
+          <i class="fa-solid fa-paper-plane"></i> অর্ডার সম্পন্ন করুন
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= HERB DETAIL MODAL ================= -->
+  <div id="herb-detail-modal" class="modal-backdrop hidden">
+    <div class="modal-card herb-detail-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <i class="fa-solid fa-seedling modal-icon"></i>
+          <h3 id="herb-modal-title">ভেষজের নাম</h3>
+        </div>
+        <button class="modal-close" onclick="closeHerbDetailModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body herb-modal-body" id="herb-modal-content">
+        <!-- Injected via JS -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeHerbDetailModal()">বন্ধ করুন</button>
+        <button class="btn-order-glow" id="btn-herb-modal-order" onclick="orderCurrentHerb()">
+          <i class="fa-solid fa-bag-shopping"></i> এই ভেষজ অর্ডার করুন
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Audio Player Element for TTS Voice Playback -->
+  <audio id="tts-audio-player" style="display:none"></audio>
+
+  <!-- Application Logic -->
+  <script src="/static/app.js"></script>
+</body>
+</html>

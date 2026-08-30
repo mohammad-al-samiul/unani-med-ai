@@ -1,41 +1,26 @@
 # ─────────────────────────────────────────────────────────────────
-# UnaniMed AI — Python dependencies
+# UnaniMed AI — Python Dependencies (Production Compatible)
 # Install: pip install -r requirements.txt
 # ─────────────────────────────────────────────────────────────────
 
-# ── Web framework ─────────────────────────────────────────────────
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-python-multipart==0.0.6
+# ── Web Framework & Server ────────────────────────────────────────
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+pydantic>=2.0.0
+python-multipart>=0.0.6
 
-# ── HTTP clients ──────────────────────────────────────────────────
-requests==2.31.0
-httpx==0.25.2          # async HTTP — used by semantic_cache_service, ollama_config
+# ── HTTP Clients ──────────────────────────────────────────────────
+requests>=2.30.0
+httpx>=0.24.0
 
-# ── Speech-to-Text ────────────────────────────────────────────────
-faster-whisper>=0.10.0
+# ── Local Speech-to-Text (STT) ────────────────────────────────────
+faster-whisper>=1.0.0
 
-# ── Vector database ───────────────────────────────────────────────
-chromadb==0.4.22
+# ── Image Processing & Fallbacks ──────────────────────────────────
+Pillow>=10.0.0
 
-# ── Book processing (OCR + chunking) ─────────────────────────────
-pymupdf>=1.23.8         # PDF text extraction (fitz)
-pytesseract==0.3.10     # OCR fallback for scanned pages
-Pillow==10.1.0          # image handling for OCR
+# ── Environment & Utilities ───────────────────────────────────────
+python-dotenv>=1.0.0
 
-# ── Utilities ─────────────────────────────────────────────────────
-python-dotenv==1.0.0    # load .env for secrets (Telegram tokens, etc.)
-
-# ─────────────────────────────────────────────────────────────────
-# Notes:
-#   • sqlite3   — built into Python, no install needed
-#   • zipfile   — built into Python, no install needed
-#   • Piper TTS — installed separately (see TTS_SETUP_GUIDE.md)
-#   • Ollama    — installed separately (see OLLAMA_INTEGRATION_GUIDE.md)
-# ─────────────────────────────────────────────────────────────────
-
-# -- Added from book_processing ----------------------------------
-PyPDF2==3.0.1
-pdf2image==1.16.3
-tiktoken==0.5.2
+# ── Optional Fallbacks ────────────────────────────────────────────
+gTTS>=2.4.0
