@@ -250,6 +250,35 @@ python src/services/unified_ai_service.py
    - **`messages`** ও **`messaging_postbacks`** সাবস্ক্রাইব করুন।
 4. **n8n এ ওয়ার্কফ্লো ইমপোর্ট করুন:**
    - [`workflows/unani-med-complete-multimodal-workflow.json`](file:///c:/Users/alsam/Documents/web-dev/unani-med-ai/workflows/unani-med-complete-multimodal-workflow.json) ফাইলটি n8n-এ Import করে **Active** বাটনে ক্লিক করুন।
+5. **n8n-এ এনভায়রনমেন্ট ভেরিয়েবল সেট করুন** (ওয়ার্কফ্লোতে টোকেন আর হার্ডকোড করা নেই):
+   - `FB_PAGE_ACCESS_TOKEN` — পেজ অ্যাক্সেস টোকেন (Meta App > Messenger > Access Tokens)।
+   - `FB_VERIFY_TOKEN` — ডিফল্ট `unani_verify_token_2026`।
+
+### 🔧 অটো-রিপ্লাই না আসলে (Troubleshooting)
+
+**সবচেয়ে সাধারণ কারণ: অ্যাপ এখনো Development মোডে আছে।**
+Development মোডে Meta শুধুমাত্র সেই ব্যক্তিদের মেসেজের webhook ইভেন্ট পাঠায় যাদের অ্যাপে **Admin / Developer / Tester** রোল আছে। তাই নিজের অ্যাকাউন্ট থেকে টেস্ট করলে রিপ্লাই আসে, কিন্তু অন্য ফেসবুক অ্যাকাউন্ট থেকে মেসেজ দিলে কিছুই আসে না। সমাধান:
+
+1. **App Review > Permissions and Features** → `pages_messaging`-এর জন্য **Advanced Access** নিন।
+2. অ্যাপ ড্যাশবোর্ডের উপরের টগল দিয়ে অ্যাপটি **Live** করুন।
+3. অস্থায়ী সমাধান: যাকে দিয়ে টেস্ট করাবেন তাকে **App Roles > Testers**-এ যোগ করুন (তাকে ইনভাইট অ্যাকসেপ্ট করতে হবে)।
+
+পুরো সেটআপ এক কমান্ডে যাচাই করুন:
+
+```bash
+export FB_PAGE_ACCESS_TOKEN=EAAG...   # PowerShell: $env:FB_PAGE_ACCESS_TOKEN="EAAG..."
+export FB_APP_ID=...
+export FB_APP_SECRET=...
+python scripts/diagnose_messenger.py --send-test <PSID>
+```
+
+স্ক্রিপ্টটি টোকেনের বৈধতা, পেজ সাবস্ক্রিপশন (`messages`, `messaging_postbacks`), `pages_messaging` অ্যাক্সেস লেভেল ও লাইভ সেন্ড টেস্ট — সবগুলো চেক করে দেখায়।
+
+অন্যান্য চেকপয়েন্ট:
+- **টানেল URL:** `trycloudflare.com` লিংক প্রতিবার রিস্টার্টে বদলায় — নতুন URL আবার Meta-র Callback URL-এ বসাতে হবে।
+- **পেজ সাবস্ক্রিপশন:** Messenger > Webhooks > আপনার পেজের পাশে `messages` ও `messaging_postbacks` টিক থাকতে হবে।
+- **Handover Protocol:** পেজের অন্য কোনো বট/অ্যাপ থ্রেড দখল করে থাকলে ইভেন্ট `standby`-তে যায়; সেক্ষেত্রে আপনার অ্যাপকে Primary Receiver করুন।
+- **n8n Executions ট্যাব:** মেসেজ দেওয়ার পরও execution না দেখালে সমস্যা Meta-র দিকে; execution দেখালেও লাল এরর হলে সমস্যা টোকেন বা লোকাল সার্ভিসে।
 
 ---
 
