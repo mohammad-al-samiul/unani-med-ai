@@ -135,6 +135,19 @@ async def transcribe_audio_base64(audio_b64: str, language: Optional[str] = None
     return None
 
 
+async def download_as_base64(url: str) -> Optional[str]:
+    """Download a remote attachment (e.g. a Messenger CDN file) as base64."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                return base64.b64encode(resp.content).decode("utf-8")
+            logger.error("Attachment download returned status %s for %s", resp.status_code, url)
+    except Exception as e:
+        logger.error("Attachment download failed: %s", e)
+    return None
+
+
 async def generate_speech_audio(text: str, language: str = "bn") -> Dict[str, Any]:
     """Call TTS service on Port 8002 to generate audio."""
     # Clean text of markdown symbols for speech synthesis
@@ -210,6 +223,8 @@ class ChatRequest(BaseModel):
     text: Optional[str] = ""
     audio_base64: Optional[str] = None
     image_base64: Optional[str] = None
+    audio_url: Optional[str] = None
+    image_url: Optional[str] = None
     modality_preference: Optional[str] = "auto"  # auto, voice_only, text_only, both
     language: Optional[str] = "auto"             # bn, en, auto
     sender_id: Optional[str] = "web-user"
@@ -228,6 +243,13 @@ async def unified_chat_endpoint(payload: ChatRequest):
     user_query = payload.text.strip() if payload.text else ""
     transcription = None
     vision_analysis = None
+
+    # Messenger delivers attachments as CDN links rather than inline base64.
+    if payload.audio_url and not payload.audio_base64:
+        payload.audio_base64 = await download_as_base64(payload.audio_url)
+    if payload.image_url and not payload.image_base64:
+        payload.image_base64 = await download_as_base64(payload.image_url)
+
     is_voice_input = bool(payload.audio_base64)
     is_image_input = bool(payload.image_base64)
 

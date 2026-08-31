@@ -19,13 +19,23 @@
         "conditions": {
           "options": {
             "caseSensitive": true,
-            "typeValidation": "strict"
+            "typeValidation": "loose"
           },
+          "combinator": "and",
           "conditions": [
             {
               "id": "verify-hub-mode",
-              "leftValue": "={{ $json.query.hub_mode }}",
+              "leftValue": "={{ $json.query['hub.mode'] }}",
               "rightValue": "subscribe",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "verify-hub-token",
+              "leftValue": "={{ $json.query['hub.verify_token'] }}",
+              "rightValue": "={{ $env.FB_VERIFY_TOKEN || 'unani_verify_token_2026' }}",
               "operator": {
                 "type": "string",
                 "operation": "equals"
@@ -43,7 +53,7 @@
     {
       "parameters": {
         "respondWith": "text",
-        "responseBody": "={{ $json.query.hub_challenge }}",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
         "options": {}
       },
       "id": "respond-challenge",
@@ -95,7 +105,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.item.json.body || {};\nconst entry = (body.entry && body.entry[0]) || {};\nconst messaging = (entry.messaging && entry.messaging[0]) || {};\nconst senderId = messaging.sender ? messaging.sender.id : 'unknown_user';\nconst message = messaging.message || {};\n\nlet messageType = 'text';\nlet textContent = message.text || '';\nlet mediaUrl = '';\n\nif (message.attachments && message.attachments.length > 0) {\n  const att = message.attachments[0];\n  if (att.type === 'audio') {\n    messageType = 'audio';\n    mediaUrl = att.payload ? att.payload.url : '';\n  } else if (att.type === 'image') {\n    messageType = 'image';\n    mediaUrl = att.payload ? att.payload.url : '';\n  }\n}\n\nreturn [{\n  json: {\n    sender_id: senderId,\n    message_type: messageType,\n    raw_text: textContent,\n    media_url: mediaUrl\n  }\n}];"
+        "jsCode": "const events = [];\n\nfor (const item of $input.all()) {\n  const body = item.json.body || item.json || {};\n  if (body.object !== 'page') continue;\n\n  for (const entry of body.entry || []) {\n    // `standby` arrives when another app owns the thread (Handover Protocol).\n    const messagingEvents = entry.messaging || entry.standby || [];\n\n    for (const event of messagingEvents) {\n      const message = event.message || {};\n\n      // Echoes are the page's own outgoing messages; delivery/read/reaction\n      // events carry no user text. Replying to them loops or fails.\n      if (message.is_echo) continue;\n      if (event.delivery || event.read || event.reaction || event.message_edit) continue;\n\n      const senderId = event.sender && event.sender.id;\n      const pageId = (event.recipient && event.recipient.id) || entry.id;\n      if (!senderId || senderId === pageId) continue;\n\n      let messageType = 'text';\n      let textContent = message.text || '';\n      let mediaUrl = '';\n\n      if (event.postback) {\n        textContent = event.postback.payload || event.postback.title || '';\n      }\n\n      if (message.quick_reply && message.quick_reply.payload) {\n        textContent = message.quick_reply.payload;\n      }\n\n      const attachment = (message.attachments || [])[0];\n      if (attachment) {\n        if (attachment.type === 'audio') messageType = 'audio';\n        else if (attachment.type === 'image') messageType = 'image';\n        mediaUrl = (attachment.payload && attachment.payload.url) || '';\n      }\n\n      if (!textContent && !mediaUrl) continue;\n\n      events.push({\n        json: {\n          sender_id: senderId,\n          page_id: pageId,\n          message_type: messageType,\n          raw_text: textContent,\n          media_url: mediaUrl\n        }\n      });\n    }\n  }\n}\n\nreturn events;"
       },
       "id": "parse-messenger-payload",
       "name": "Parse Messenger Message",
@@ -109,7 +119,7 @@
         "url": "http://localhost:8010/api/chat",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"text\": \"{{ $json.raw_text }}\",\n  \"sender_id\": \"{{ $json.sender_id }}\",\n  \"channel\": \"messenger\",\n  \"modality_preference\": \"{{ $json.message_type === 'audio' ? 'both' : 'auto' }}\"\n}",
+        "jsonBody": "={{ JSON.stringify({ text: $json.raw_text, sender_id: $json.sender_id, channel: 'messenger', image_url: $json.message_type === 'image' ? $json.media_url : '', audio_url: $json.message_type === 'audio' ? $json.media_url : '', modality_preference: $json.message_type === 'audio' ? 'both' : 'auto' }) }}",
         "options": {}
       },
       "id": "call-unified-orchestrator",
@@ -120,32 +130,6 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "check-telegram-notification",
-              "leftValue": "={{ $json.telegram_notified }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ]
-        }
-      },
-      "id": "if-lead-telegram-notified",
-      "name": "IF Customer Lead Notified",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [1120, 500]
-    },
-    {
-      "parameters": {
         "method": "POST",
         "url": "https://graph.facebook.com/v18.0/me/messages",
         "sendQuery": true,
@@ -153,20 +137,20 @@
           "parameters": [
             {
               "name": "access_token",
-              "value": "YOUR_PAGE_ACCESS_TOKEN_HERE"
+              "value": "={{ $env.FB_PAGE_ACCESS_TOKEN }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"recipient\": { \"id\": \"{{ $('parse-messenger-payload').item.json.sender_id }}\" },\n  \"message\": { \"text\": \"{{ $json.text_response }}\" }\n}",
+        "jsonBody": "={{ JSON.stringify({ recipient: { id: $('Parse Messenger Message').item.json.sender_id }, messaging_type: 'RESPONSE', message: { text: ($json.text_response || 'দুঃখিত, এই মুহূর্তে উত্তর তৈরি করা যায়নি। একটু পরে আবার চেষ্টা করুন।').slice(0, 1900) } }) }}",
         "options": {}
       },
       "id": "send-messenger-reply",
       "name": "Send Messenger Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1360, 500]
+      "position": [1120, 500]
     }
   ],
   "connections": {
@@ -234,24 +218,6 @@
     },
     "Call Unani Unified AI Orchestrator": {
       "main": [
-        [
-          {
-            "node": "IF Customer Lead Notified",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IF Customer Lead Notified": {
-      "main": [
-        [
-          {
-            "node": "Send Messenger Reply",
-            "type": "main",
-            "index": 0
-          }
-        ],
         [
           {
             "node": "Send Messenger Reply",
