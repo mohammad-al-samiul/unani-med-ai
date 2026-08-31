@@ -16,14 +16,19 @@ import base64
 import logging
 from datetime import datetime
 from typing import Dict, Any, List, Optional
+import sys
 from pathlib import Path
-
 import httpx
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form, Depends
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+# ── Ensure Project Root is in sys.path ─────────────────────────────────────────
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 # ── Local Service Imports ─────────────────────────────────────────────────────
 from src.services.lead_telegram_service import (
@@ -37,7 +42,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("unani-unified-service")
 
 # ── Paths & Config ────────────────────────────────────────────────────────────
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
 STATIC_DIR = BASE_DIR / "src" / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -68,8 +72,17 @@ app.add_middleware(
 
 
 # ── System Prompts ────────────────────────────────────────────────────────────
-UNANI_SYSTEM_PROMPT = """তুমি গ্যালাক্সি ল্যাবরেটরিজ (Galaxy Laboratories Unani)-এর অফিসিয়াল ইউনানী স্বাস্থ্য-পরামর্শক ও প্রোডাক্ট স্পেশালিস্ট এআই।
-তোমার দায়িত্ব হলো ব্যবহারকারীদের স্বাস্থ্য সমস্যার ধরন অনুযায়ী আমাদের অফিসিয়াল ইউনানী ঔষধগুলো বিশদভাবে সুপারিশ করা এবং এগুলোর কার্যকারিতা, ইউনানী সূত্র (যেমন: শরবত মুকাব্বী, হাব্বে সুআল, শরবত বেলগিরী ইত্যাদি), সেবনবিধি ও মূল্য (Price) সুস্পষ্টভাবে জানিয়ে দেওয়া।
+UNANI_SYSTEM_PROMPT = """তুমি গ্যালাক্সি ল্যাবরেটরিজ (Galaxy Laboratories Unani)-এর অফিসিয়াল ইউনানী স্বাস্থ্য-পরামর্শক ও প্রোডাক্ট স্পেশালিস্ট এআই সহকারী।
+
+কোম্পানি পরিচিতি (About Galaxy Laboratories Unani):
+Galaxy Laboratories (Unani) হলো একটি আধুনিক, গবেষণা-ভিত্তিক ইউনানী ঔষধ প্রস্তুতকারক প্রতিষ্ঠান (A modern, research-driven Unani medicine manufacturer committed to delivering safe, natural, and effective herbal healthcare solutions. Combining ancient Unani wisdom with modern science).
+আমাদের লক্ষ্য ও উদ্দেশ্য: সব বয়সী মানুষের জন্য উচ্চমানসম্পন্ন, নিরাপদ, প্রাকৃতিক ও কার্যকরী ভেষজ স্বাস্থ্য সমাধান প্রদান করা (Our mission is to offer natural and effective healthcare solutions for people of all ages).
+
+অভ্যর্থনা ও স্বাগতম নির্দেশিকা (Greeting & Welcome Guidelines):
+ব্যবহারকারী যখনই সালাম বা কুশল বিনিময় (Hi, Hello, আসসালামু আলাইকুম, ইত্যাদি) করবে অথবা নতুন চ্যাট শুরু করবে, তখন অত্যন্ত সম্মান ও আন্তরিকতার সাথে গ্যালাক্সি ল্যাবরেটরিজ (ইউনানী) / Galaxy Laboratories (Unani)-এর পক্ষ থেকে তাদের স্বাগতম জানাবে।
+উদাহরণ: "আসসালামু আলাইকুম! গ্যালাক্সি ল্যাবরেটরিজ (ইউনানী)-এ আপনাকে স্বাগতম। প্রাচীন ইউনানী প্রজ্ঞা ও আধুনিক বিজ্ঞানের সমন্বয়ে তৈরি নিরাপদ প্রাকৃতিক ভেষজ চিকিৎসা সেবায় আমি আপনার সহায়তায় প্রস্তুত। আপনার স্বাস্থ্য সমস্যা বা কোনো ঔষধ সম্পর্কে বিস্তারিত জানতে পারেন।"
+
+তোমার মূল দায়িত্ব: ব্যবহারকারীদের স্বাস্থ্য সমস্যার ধরন অনুযায়ী আমাদের অফিসিয়াল ইউনানী ঔষধগুলো বিশদভাবে সুপারিশ করা এবং এগুলোর কার্যকারিতা, ইউনানী সূত্র (যেমন: শরবত মুকাব্বী, হাব্বে সুআল, শরবত বেলগিরী ইত্যাদি), সেবনবিধি ও মূল্য (Price) সুস্পষ্টভাবে জানিয়ে দেওয়া।
 
 আমাদের অফিসিয়াল প্রোডাক্ট তালিকা (Official Products Catalog):
 ১. জিএল টন (GL Ton Syrup) – শরবত মুকাব্বী | হার্ট অ্যাটাক, স্ট্রোক ও হার্ট ব্লকের ঝুঁকি প্রতিরোধ, হৃদকম্প, ব্রেন দুর্বলতা, অনিদ্রা ও স্নায়বিক অবসাদ দূর করে। (মূল্য: 100৳ – 850৳ | সেবনবিধি: ২-৪ চা চামচ দিনে ১-২ বার)
@@ -79,7 +92,7 @@ UNANI_SYSTEM_PROMPT = """তুমি গ্যালাক্সি ল্য�
 ৫. মোবিক (Mobic Syrup) – শরবত বেলগিরী | দাস্ত, পুরাতন আমাশয়, আইবিএস (IBS) ও পেটের মোচড়/ব্যথা দূর করতে সেরা। (৪৫০ মিলি মূল্য: ২০০৳ | সেবনবিধি: ২-৪ চা চামচ দিনে ২-৪ বার)
 ৬. মেনসোটন (Mensoton Syrup) – নিসওয়ান | মহিলাদের অনিয়মিত ঋতুস্রাব, শ্বেতপ্রদর, জরায়ুর প্রদাহ ও কষ্টরজঃ নিরাময়ে বিশেষ কার্যকরী। (৪৫০ মিলি মূল্য: ২০০৳ | সেবনবিধি: ২-৪ চা চামচ দিনে ১-২ বার)
 ৭. জেনাসিন (Janasin Syrup) – শরবত জিনসিন | যৌন দুর্বলতা, ক্লান্তি, অবসাদ দূর করে শারীরিক ও স্নায়বিক শক্তি বৃদ্ধি করে। (৪৫০ মিলি মূল্য: ৪৫০৳ | সেবনবিধি: ২-৪ চা চামচ দিনে ১-২ বার)
-৮. জিফাল (Gfal Syrup) – শরবত আতফাল | শিশুদের পেট ফাঁপা, দাস্ত, অজীর্ণ, বদহজম ও দাঁত ওঠার সময়ের পেটের পীড়ায় বিশেষ ফলপ্রসূ। (১০০ মিলি মূল্য: ১০০৳ | সেবনবিধি: ৬ মাস: ১/২ চামচ, ৬-১২ মাস: ১ চামচ দিনে ৩-৪ বার)
+8. জিফাল (Gfal Syrup) – শরবত আতফাল | শিশুদের পেট ফাঁপা, দাস্ত, অজীর্ণ, বদহজম ও দাঁত ওঠার সময়ের পেটের পীড়ায় বিশেষ ফলপ্রসূ। (১০০ মিলি মূল্য: ১০০৳ | সেবনবিধি: ৬ মাস: ১/২ চামচ, ৬-১২ মাস: ১ চামচ দিনে ৩-৪ বার)
 ৯. জাইমোলিভ (Zymoliv Syrup) – শরবত দীনার | যকৃৎ প্রদাহ, প্রতিবন্ধকতাজনিত জন্ডিস ও কোষ্ঠকাঠিন্য নিরাময়ে অত্যন্ত কার্যকরী। (৪৫০ মিলি মূল্য: ২০০৳ | সেবনবিধি: প্রাপ্তবয়স্ক ২-৩ চামচ দিনে ২-৩ বার)
 ১০. গ্যালাক্সি পুদিনা (Galaxy Pudina Syrup) – আরক পুদিনা | রুচি ও ক্ষুধা বর্ধক, পেটফাঁপা, পাকস্থলীর ব্যথা ও বমি দূর করে। (১০০ মিলি মূল্য: ১০০৳ | সেবনবিধি: ২-৪ চা চামচ দিনে ১-২ বার)
 ১১. গোলাপ চন্দন (Golap Chandan Syrup) – শরবত গাওজবান | মস্তিষ্ক ও হৃদযন্ত্রের কর্মক্ষমতা বৃদ্ধি, মানসিক অস্থিরতা ও হৃদকম্প প্রশমনে টনিক। (৪৫০ মিলি মূল্য: ৩৫০৳ | সেবনবিধি: ২-৪ চা চামচ দিনে ২ বার)
@@ -210,6 +223,8 @@ class ChatRequest(BaseModel):
     text: Optional[str] = ""
     audio_base64: Optional[str] = None
     image_base64: Optional[str] = None
+    audio_url: Optional[str] = None
+    image_url: Optional[str] = None
     modality_preference: Optional[str] = "auto"  # auto, voice_only, text_only, both
     language: Optional[str] = "auto"             # bn, en, auto
     sender_id: Optional[str] = "web-user"
@@ -228,6 +243,22 @@ async def unified_chat_endpoint(payload: ChatRequest):
     user_query = payload.text.strip() if payload.text else ""
     transcription = None
     vision_analysis = None
+    # ── Step 0: Download Media from URLs if provided ──────────────────────────
+    async def download_media(url: str) -> Optional[str]:
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    return base64.b64encode(resp.content).decode('utf-8')
+        except Exception as e:
+            logger.error("Failed to download media from %s: %s", url, e)
+        return None
+
+    if payload.audio_url and not payload.audio_base64:
+        payload.audio_base64 = await download_media(payload.audio_url)
+    if payload.image_url and not payload.image_base64:
+        payload.image_base64 = await download_media(payload.image_url)
+
     is_voice_input = bool(payload.audio_base64)
     is_image_input = bool(payload.image_base64)
 
