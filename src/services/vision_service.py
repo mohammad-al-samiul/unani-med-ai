@@ -18,15 +18,20 @@ import httpx
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from PIL import Image
+from dotenv import load_dotenv
+
+# ── Load .env ─────────────────────────────────────────────────────────────────
+load_dotenv()
 
 # ── Logging Setup ─────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("vision-service")
 
 # ── Config ────────────────────────────────────────────────────────────────────
+VISION_PORT = int(os.getenv("VISION_PORT", "8013"))
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "llama3.2-vision:11b")
-OLLAMA_TEXT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "llava:7b")
+OLLAMA_TEXT_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:32b")
 
 app = FastAPI(title="Unani Vision & Image Service", version="1.0.0")
 
@@ -84,6 +89,7 @@ class VisionProcessor:
             "prompt": f"{system_instruction}\n\nইউজার প্রশ্ন: {prompt_text}",
             "images": [image_b64],
             "stream": False,
+            "keep_alive": "24h",
             "options": {
                 "temperature": 0.5,
                 "num_predict": 700
@@ -91,7 +97,7 @@ class VisionProcessor:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
                 if response.status_code == 200:
                     data = response.json()
@@ -223,4 +229,4 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8013)
+    uvicorn.run(app, host="0.0.0.0", port=VISION_PORT)

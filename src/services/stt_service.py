@@ -9,9 +9,15 @@ import shutil
 import base64
 import uuid
 import logging
+from dotenv import load_dotenv
+
+# ── Load .env ─────────────────────────────────────────────────────────────────
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("stt-service")
+
+STT_PORT = int(os.getenv("STT_PORT", "8001"))
 
 app = FastAPI(title="Speech-to-Text Service", version="1.1.0")
 
@@ -215,4 +221,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=STT_PORT)

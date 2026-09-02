@@ -4,15 +4,30 @@ Patient Profile Service
 Manages SQLite database for patient profiles with conversation flow support.
 """
 
+import os
 import sqlite3
 import json
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from pathlib import Path
+from dotenv import load_dotenv
+
+# ── Load .env ─────────────────────────────────────────────────────────────────
+load_dotenv()
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+DEFAULT_DB_PATH = BASE_DIR / "data" / "databases" / "patient_profiles.db"
+DB_PATH = Path(os.getenv("PATIENT_PROFILE_DB_PATH", str(DEFAULT_DB_PATH)))
+PATIENT_PROFILE_PORT = int(os.getenv("PATIENT_PROFILE_PORT", "8003"))
+
+# Ensure directory exists
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 
 class PatientProfileService:
-    def __init__(self, db_path: str = "./patient_profiles.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = str(db_path or DB_PATH)
+        Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._initialize_database()
     
     def _initialize_database(self):
@@ -422,4 +437,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8003)
+    uvicorn.run(app, host="0.0.0.0", port=PATIENT_PROFILE_PORT)

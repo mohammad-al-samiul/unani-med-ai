@@ -48,7 +48,7 @@ def ensure_cloudflared():
 def run_tunnel(port: int = 5678):
     """Run tunnel and parse the live public URL."""
     print("=" * 65)
-    print(f"🚀 UnaniMed AI — Live Public HTTPS Tunnel for Port {port}")
+    print(f"[*] UnaniMed AI -- Live Public HTTPS Tunnel for Port {port}")
     print("=" * 65)
 
     cf_binary = ensure_cloudflared()
@@ -63,7 +63,9 @@ def run_tunnel(port: int = 5678):
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            universal_newlines=True
+            universal_newlines=True,
+            encoding="utf-8",
+            errors="replace"
         )
 
         tunnel_url = None
@@ -75,15 +77,27 @@ def run_tunnel(port: int = 5678):
                 break
 
         if tunnel_url:
-            print("\n" + "═" * 65)
-            print("🎉 YOUR LIVE PUBLIC URL IS READY!")
-            print("═" * 65)
-            print(f"\n🌐 Base Public URL:\n   {tunnel_url}\n")
-            print(f"📋 Facebook Messenger Webhook Callback URL (Paste this in Facebook):\n   👉 {tunnel_url}/webhook/webhook\n")
-            print(f"🔑 Verify Token (Paste in Facebook):\n   👉 unani_verify_token_2026\n")
-            print("═" * 65)
-            print("⚠️ Keep this terminal window open while using the webhook.")
-            print("═" * 65 + "\n")
+            print("\n" + "=" * 65)
+            print("YOUR LIVE PUBLIC URL IS READY!")
+            print("=" * 65)
+            print(f"\nBase Public URL:\n   {tunnel_url}\n")
+            print(f"Facebook Messenger Webhook Callback URL:\n   -> {tunnel_url}/webhook/fb-webhook\n")
+            print(f"Verify Token:\n   -> subscribe\n")
+            print("=" * 65)
+            print("Keep this process running while using the webhook.")
+            print("=" * 65 + "\n")
+
+            # Write URL to a local status file so other tools/scripts can read it
+            url_file = BASE_DIR / "data" / "live_tunnel_url.txt"
+            url_file.parent.mkdir(parents=True, exist_ok=True)
+            url_file.write_text(f"{tunnel_url}/webhook/fb-webhook", encoding="utf-8")
+
+            try:
+                for line in process.stdout:
+                    pass
+            except KeyboardInterrupt:
+                process.terminate()
+            return
 
             # Keep reading output so process doesn't block
             try:

@@ -20,9 +20,15 @@ from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# ── Load .env ─────────────────────────────────────────────────────────────────
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("tts-service")
+
+TTS_PORT = int(os.getenv("TTS_PORT", "8002"))
 
 app = FastAPI(title="Unani TTS Service", version="2.0.0")
 
@@ -198,4 +204,4 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    uvicorn.run(app, host="0.0.0.0", port=TTS_PORT)

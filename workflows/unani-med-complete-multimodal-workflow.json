@@ -5,7 +5,7 @@
       "parameters": {
         "httpMethod": "GET",
         "path": "fb-webhook",
-        "responseMode": "lastNode",
+        "responseMode": "responseNode",
         "options": {}
       },
       "id": "webhook-get-verify",
@@ -42,29 +42,37 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{ json: { challenge: $input.item.json.query['hub.challenge'] } }];"
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {
+          "responseCode": 200
+        }
       },
       "id": "respond-challenge",
       "name": "Respond Challenge",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
       "position": [640, 140]
     },
     {
       "parameters": {
-        "jsCode": "return [{ json: { error: 'Verification failed', code: 403 } }];"
+        "respondWith": "text",
+        "responseBody": "Verification failed",
+        "options": {
+          "responseCode": 403
+        }
       },
       "id": "respond-verify-fail",
       "name": "Respond Verify Fail",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
       "position": [640, 260]
     },
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "fb-webhook",
-        "responseMode": "lastNode",
+        "responseMode": "responseNode",
         "options": {}
       },
       "id": "webhook-post-messages",
@@ -73,7 +81,20 @@
       "typeVersion": 1,
       "position": [200, 500]
     },
-
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "EVENT_RECEIVED",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "ack-messenger-instant",
+      "name": "Instant Messenger 200 ACK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [420, 500]
+    },
     {
       "parameters": {
         "jsCode": "const body = $input.item.json.body || {};\nconst entry = (body.entry && body.entry[0]) || {};\nconst messaging = (entry.messaging && entry.messaging[0]) || {};\nconst senderId = messaging.sender ? messaging.sender.id : 'unknown_user';\nconst message = messaging.message || {};\n\nlet messageType = 'text';\nlet textContent = message.text || '';\nlet mediaUrl = '';\n\nif (message.attachments && message.attachments.length > 0) {\n  const att = message.attachments[0];\n  if (att.type === 'audio') {\n    messageType = 'audio';\n    mediaUrl = att.payload ? att.payload.url : '';\n  } else if (att.type === 'image') {\n    messageType = 'image';\n    mediaUrl = att.payload ? att.payload.url : '';\n  }\n}\n\nreturn [{\n  json: {\n    sender_id: senderId,\n    message_type: messageType,\n    raw_text: textContent,\n    media_url: mediaUrl\n  }\n}];"
@@ -82,15 +103,15 @@
       "name": "Parse Messenger Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [420, 500]
+      "position": [640, 500]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:8010/api/chat",
+        "url": "http://host.docker.internal:8010/api/chat",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"text\": \"{{ $json.raw_text }}\",\n  \"sender_id\": \"{{ $json.sender_id }}\",\n  \"channel\": \"messenger\",\n  \"modality_preference\": \"{{ $json.message_type === 'audio' ? 'both' : 'auto' }}\"\n}",
+        "jsonBody": "={\n  \"text\": \"{{ $json.raw_text }}\",\n  \"audio_url\": \"{{ $json.message_type === 'audio' ? $json.media_url : '' }}\",\n  \"image_url\": \"{{ $json.message_type === 'image' ? $json.media_url : '' }}\",\n  \"sender_id\": \"{{ $json.sender_id }}\",\n  \"channel\": \"messenger\",\n  \"modality_preference\": \"{{ $json.message_type === 'audio' ? 'both' : 'auto' }}\"\n}",
         "options": {
           "timeout": 90000
         }
@@ -99,9 +120,8 @@
       "name": "Call Unani Unified AI Orchestrator",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [640, 500]
+      "position": [880, 500]
     },
-
     {
       "parameters": {
         "method": "POST",
@@ -111,20 +131,20 @@
           "parameters": [
             {
               "name": "access_token",
-              "value": "={{ $env.FB_PAGE_ACCESS_TOKEN }}"
+              "value": "EAGTfXYOWuEsBSY1yDEZC9aPyUlrZAYzhluKcvNqJruRfQxeCLBPJ3QZBYOrOgvdJ0oxmV7YAnGRJENJZBelZA6aAgJu6l0Wg7vmaSv0OtbBnWyCTYARTVI7uTMt2r7Tr0ZCtyzhGeLiZAM2fpBA5YxA0zIXEFbOetFib8glRtCdIFIBtf0b5IB9nH8KM4FqM7mESJHBjNGZBmgfo8o6orrAobZA4rliSMp6g9E9TeAD9AU1wZD"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"recipient\": { \"id\": \"{{ $('Parse Messenger Message').item.json.sender_id }}\" },\n  \"message\": { \"text\": \"{{ $json.text_response.substring(0, 2000) }}\" }\n}",
+        "jsonBody": "={\n  \"recipient\": { \"id\": \"{{ $('Parse Messenger Message').item.json.sender_id }}\" },\n  \"message\": { \"text\": \"{{ $json.text_response ? $json.text_response.substring(0, 2000) : 'ধন্যবাদ, আপনার বার্তাটি পেয়েছি।' }}\" }\n}",
         "options": {}
       },
       "id": "send-messenger-reply",
       "name": "Send Messenger Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [880, 500]
+      "position": [1120, 500]
     }
   ],
   "connections": {
@@ -158,6 +178,17 @@
       ]
     },
     "Webhook POST (Messenger Messages)": {
+      "main": [
+        [
+          {
+            "node": "Instant Messenger 200 ACK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instant Messenger 200 ACK": {
       "main": [
         [
           {

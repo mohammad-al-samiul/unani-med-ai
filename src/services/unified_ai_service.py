@@ -14,13 +14,19 @@ import re
 import json
 import base64
 import logging
+import asyncio
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 import sys
 from pathlib import Path
+
+# ── Load .env FIRST before anything else ──────────────────────────────────────
+from dotenv import load_dotenv
+load_dotenv()
+
 import httpx
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form, Depends
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -45,13 +51,16 @@ logger = logging.getLogger("unani-unified-service")
 STATIC_DIR = BASE_DIR / "src" / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
+UNIFIED_PORT = int(os.getenv("UNIFIED_PORT", "8010"))
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
-OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "llama3.2-vision:11b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:32b")
+OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "llava:7b")
 STT_PORT = int(os.getenv("STT_PORT", "8001"))
 TTS_PORT = int(os.getenv("TTS_PORT", "8002"))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+META_VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN", os.getenv("FB_VERIFY_TOKEN", "subscribe"))
+FB_PAGE_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN", "")
 
 safety_checker = SafetyChecker(load_safety_config())
 
@@ -182,19 +191,20 @@ async def generate_speech_audio(text: str, language: str = "bn") -> Dict[str, An
 
 
 async def call_local_ollama(prompt: str, system_prompt: str = UNANI_SYSTEM_PROMPT, history: List[Dict[str, str]] = None) -> str:
-    """Send prompt to local Ollama llama3.1:8b."""
+    """Send prompt to local Ollama configured model."""
     formatted_prompt = f"{system_prompt}\n\n"
     if history:
         for turn in history[-4:]:
             role = "ব্যবহারকারী" if turn.get("role") == "user" else "সহকারী"
             formatted_prompt += f"{role}: {turn.get('content', '')}\n"
-    
+
     formatted_prompt += f"ব্যবহারকারী: {prompt}\nসহকারী:"
 
     payload = {
         "model": OLLAMA_MODEL,
         "prompt": formatted_prompt,
         "stream": False,
+        "keep_alive": "24h",
         "options": {
             "temperature": 0.7,
             "top_p": 0.9,
@@ -203,18 +213,18 @@ async def call_local_ollama(prompt: str, system_prompt: str = UNANI_SYSTEM_PROMP
     }
 
     try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
             if resp.status_code == 200:
                 return resp.json().get("response", "").strip()
             else:
-                logger.error("Ollama returned status %s: %s", resp.status_code, resp.text)
+                logger.error("Ollama returned status %s for model %s: %s", resp.status_code, OLLAMA_MODEL, resp.text)
     except Exception as e:
-        logger.error("Ollama call failed: %s", e)
+        logger.error("Ollama call failed for model %s: %s", OLLAMA_MODEL, e)
 
     return (
-        "দুঃখিত, স্থানীয় Ollama সার্ভারের সাথে সংযোগ করা সম্ভব হয়নি। "
-        "অনুগ্রহ করে নিশ্চিত করুন যে Ollama চালু আছে (`ollama run llama3.1:8b`)।"
+        f"দুঃখিত, স্থানীয় Ollama সার্ভারের সাথে সংযোগ করা সম্ভব হয়নি। "
+        f"অনুগ্রহ করে নিশ্চিত করুন যে Ollama চালু আছে (`ollama run {OLLAMA_MODEL}`)."
     )
 
 
@@ -448,6 +458,133 @@ async def get_herbs_list(search: Optional[str] = None):
     return {"success": True, "herbs": herbs}
 
 
+# ── Facebook Messenger Helper Functions ───────────────────────────────────────
+async def send_fb_messenger_message(recipient_id: str, text: str) -> bool:
+    """Send message reply back to Facebook Messenger via Graph API."""
+    if not FB_PAGE_ACCESS_TOKEN:
+        logger.warning("FB_PAGE_ACCESS_TOKEN not configured. Skipping reply.")
+        return False
+
+    url = f"https://graph.facebook.com/v19.0/me/messages?access_token={FB_PAGE_ACCESS_TOKEN}"
+    payload = {
+        "recipient": {"id": recipient_id},
+        "message": {"text": text}
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(url, json=payload)
+            if resp.status_code in [200, 201]:
+                logger.info("Successfully sent Messenger reply to %s", recipient_id)
+                return True
+            else:
+                logger.error("Facebook Graph API error %s: %s", resp.status_code, resp.text)
+    except Exception as e:
+        logger.error("Failed to send Facebook Messenger message: %s", e)
+    return False
+
+
+async def process_facebook_message(
+    sender_id: str,
+    text: str,
+    audio_url: Optional[str] = None,
+    image_url: Optional[str] = None
+):
+    """Processes incoming Messenger message using Unified AI Pipeline and sends auto-reply."""
+    try:
+        logger.info("Processing Facebook message from %s: text='%s', audio='%s', image='%s'", sender_id, text, audio_url, image_url)
+        chat_req = ChatRequest(
+            text=text,
+            audio_url=audio_url,
+            image_url=image_url,
+            sender_id=sender_id,
+            channel="Facebook Messenger"
+        )
+        ai_res = await unified_chat_endpoint(chat_req)
+        reply_text = ai_res.get("text_response", "")
+        if reply_text:
+            # Append herbal catalog info if matched
+            herb_cards = ai_res.get("herb_cards", [])
+            if herb_cards:
+                herb_names = ", ".join([h.get("name_bn", h.get("name", "")) for h in herb_cards])
+                reply_text += f"\n\n🌿 প্রাসঙ্গিক ভেষজ: {herb_names}"
+
+            await send_fb_messenger_message(sender_id, reply_text)
+    except Exception as e:
+        logger.error("Error in process_facebook_message: %s", e)
+
+
+# ── Facebook / Meta Webhook Handlers ──────────────────────────────────────────
+@app.get("/webhook/fb-webhook")
+@app.get("/webhook")
+async def meta_webhook_verification(request: Request):
+    """
+    Meta Webhook Verification Endpoint.
+    Handles GET challenge request from Meta/Facebook Developer Dashboard.
+    """
+    params = request.query_params
+    mode = params.get("hub.mode")
+    token = params.get("hub.verify_token")
+    challenge = params.get("hub.challenge")
+
+    logger.info("Meta Webhook Verification: mode=%s, token=%s, challenge=%s", mode, token, challenge)
+
+    if mode == "subscribe" and token in [META_VERIFY_TOKEN, "subscribe", "unanimed_token", "unani_verify_token_2026"]:
+        logger.info("Meta Webhook verification SUCCEEDED with challenge: %s", challenge)
+        return PlainTextResponse(content=str(challenge or ""), status_code=200)
+
+    logger.warning("Meta Webhook verification FAILED. Token mismatch: %s != %s", token, META_VERIFY_TOKEN)
+    return PlainTextResponse(content="Verification token mismatch", status_code=403)
+
+
+@app.post("/webhook/fb-webhook")
+@app.post("/webhook")
+async def meta_webhook_events(request: Request):
+    """
+    Meta Messenger Webhook Event Receiver.
+    """
+    try:
+        data = await request.json()
+        logger.info("Received Meta Webhook event: %s", data)
+
+        if data.get("object") == "page":
+            for entry in data.get("entry", []):
+                for messaging_event in entry.get("messaging", []):
+                    sender_id = messaging_event.get("sender", {}).get("id")
+                    if not sender_id:
+                        continue
+
+                    # Ignore echoes from page itself
+                    msg = messaging_event.get("message", {})
+                    if msg.get("is_echo"):
+                        continue
+
+                    text = msg.get("text", "")
+                    audio_url = None
+                    image_url = None
+
+                    for att in msg.get("attachments", []):
+                        att_type = att.get("type")
+                        payload = att.get("payload", {})
+                        if att_type == "audio":
+                            audio_url = payload.get("url")
+                        elif att_type == "image":
+                            image_url = payload.get("url")
+
+                    if text or audio_url or image_url:
+                        asyncio.create_task(
+                            process_facebook_message(
+                                sender_id=sender_id,
+                                text=text,
+                                audio_url=audio_url,
+                                image_url=image_url
+                            )
+                        )
+        return JSONResponse(content={"status": "EVENT_RECEIVED"}, status_code=200)
+    except Exception as e:
+        logger.error("Error processing Meta webhook event: %s", e)
+        return JSONResponse(content={"status": "ERROR"}, status_code=400)
+
+
 # ── Live System Health Monitor ────────────────────────────────────────────────
 @app.get("/api/system/status")
 async def system_status():
@@ -485,7 +622,7 @@ async def system_status():
     return {
         "status": "online",
         "service": "UnaniMed AI Unified Master Engine",
-        "port": 8010,
+        "port": UNIFIED_PORT,
         "ollama": {
             "online": ollama_ok,
             "url": OLLAMA_URL,
@@ -516,4 +653,4 @@ async def serve_index():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8010)
+    uvicorn.run(app, host="0.0.0.0", port=UNIFIED_PORT)
